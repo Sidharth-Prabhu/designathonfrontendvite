@@ -28,50 +28,13 @@ import dayjs from 'dayjs';
 
 const Grid = MuiGrid as any;
 
-// Simple Error Boundary to catch crashes in Lazy loaded components
-class ErrorBoundary extends React.Component<{children: any}, {hasError: boolean, error: any}> {
-  constructor(props: any) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-  static getDerivedStateFromError(error: any) {
-    return { hasError: true, error };
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <Paper sx={{ p: 3, mt: 2, textAlign: 'center', bgcolor: '#fff1f2', border: '1px solid #fda4af', borderRadius: 3 }}>
-          <Typography color="error" fontWeight="700">Scanner Error</Typography>
-          <Typography variant="body2" sx={{ mt: 1, color: '#991b1b' }}>
-            {this.state.error?.message || "The face scanner failed to initialize."}
-          </Typography>
-          <Typography variant="caption" display="block" sx={{ mt: 1, opacity: 0.7 }}>
-            Note: iOS Safari requires HTTPS for camera access.
-          </Typography>
-          <Button 
-            variant="outlined" 
-            color="error" 
-            size="small" 
-            sx={{ mt: 2, borderRadius: 2 }} 
-            onClick={() => window.location.reload()}
-          >
-            Reload Page
-          </Button>
-        </Paper>
-      );
-    }
-    return this.props.children;
-  }
-}
-
-// Lazy load FaceScanner to isolate potential initialization crashes
-const FaceScanner = React.lazy(() => import('../../components/FaceScanner'));
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [stats, setStats] = useState({
-    attendanceRate: '--%',
+    attendanceRate: '0%',
+    percentage: 0,
     present: 0,
     absent: 0,
     onDuty: 0,
@@ -83,9 +46,7 @@ const StudentDashboard = () => {
   const [portalOpen, setPortalOpen] = useState(false);
   const [portalExpiry, setPortalExpiry] = useState<any>(null);
   const [timeLeft, setTimeLeft] = useState(0);
-  const [marking, setMarking] = useState(false);
   const [message, setMessage] = useState({ text: '', type: 'info' });
-  const [showScanner, setShowScanner] = useState(false);
 
   useEffect(() => {
     loadStats();
@@ -156,43 +117,28 @@ const StudentDashboard = () => {
   };
 
   const handleMarkAttendance = async () => {
-    setShowScanner(true);
-  };
-
-  const onFaceVerify = async (descriptor: string) => {
     if (!studentProfile?.classId) return;
     try {
-      setMarking(true);
-      await studentService.markMyAttendance(studentProfile.classId, user.username, descriptor);
+      setLoading(true);
+      await studentService.markMyAttendance(studentProfile.classId, user.username);
       setMessage({ text: 'Attendance marked successfully!', type: 'success' });
       setPortalOpen(false); 
-      setShowScanner(false);
       loadStats(); 
     } catch (err: any) {
-      setMessage({ text: err.response?.data?.error || 'Face verification failed', type: 'error' });
+      setMessage({ text: err.response?.data?.error || 'Failed to mark attendance', type: 'error' });
     } finally {
-      setMarking(false);
+      setLoading(false);
     }
   };
 
-  const onFaceEnroll = async (descriptor: string) => {
-    try {
-      setMarking(true);
-      await studentService.enrollFace(user.username, descriptor);
-      setMessage({ text: 'Face biometric registered successfully!', type: 'success' });
-      loadProfileAndCheckPortal(); 
-    } catch (err: any) {
-      setMessage({ text: err.response?.data?.error || 'Enrollment failed', type: 'error' });
-    } finally {
-      setMarking(false);
-    }
-  };
 
   const loadStats = async () => {
     try {
       setLoading(true);
-      if (!user?.username) return;
-      const profile = await studentService.getProfile(user.username);
+      const username = localStorage.getItem('username');
+      if (!username) return;
+
+      const profile = await studentService.getProfile(username);
       if (!profile) return;
       
       const studentId = profile.id;
@@ -202,15 +148,16 @@ const StudentDashboard = () => {
         studentService.getAttendanceSummary(studentId),
       ]);
 
-      const totalDays = attendanceData.totalRecords || 0;
+      const totalDays = summaryData.totalDays || 0;
       const presentDays = summaryData.summary?.present || 0;
       
-      const attendanceRate = totalDays > 0 
+      const percentage = totalDays > 0 
         ? Math.round((presentDays / totalDays) * 100) 
         : 0;
 
       setStats({
-        attendanceRate: `${attendanceRate}%`,
+        attendanceRate: `${percentage}%`,
+        percentage: percentage,
         present: presentDays,
         absent: summaryData.summary?.absent || 0,
         onDuty: (summaryData.summary?.odInternal || 0) + (summaryData.summary?.odExternal || 0),
@@ -225,19 +172,19 @@ const StudentDashboard = () => {
   const statItems = [
     {
       title: 'Attendance Rate',
-      value: loading ? <CircularProgress size={24} sx={{ color: 'white' }} /> : stats.attendanceRate,
-      description: 'Current Attendance',
-      icon: <TrendingUpIcon />,
+      value: loading ? <CircularProgress size={24} sx={{ color: 'white' }} /> : `${stats.percentage}%`,
+      description: 'Overall Presence',
+      icon: <AssignmentIcon />,
       path: '/student/attendance',
-      color: 'stat-green',
+      color: 'stat-cyan',
     },
     {
       title: 'Present',
       value: loading ? <CircularProgress size={24} sx={{ color: 'white' }} /> : stats.present,
       description: 'Days Present',
-      icon: <EventIcon />,
+      icon: <CheckCircleIcon />,
       path: '/student/attendance',
-      color: 'stat-cyan',
+      color: 'stat-green',
     },
     {
       title: 'Absent',
@@ -259,42 +206,9 @@ const StudentDashboard = () => {
 
   return (
     <Layout title="Dashboard">
-      {/* Face Enrollment for New Users */}
-      {studentProfile && !studentProfile.faceRegistered && (
-        <Paper
-          elevation={0}
-          sx={{
-            p: 4,
-            mb: 4,
-            borderRadius: 3,
-            background: 'linear-gradient(135deg, #3B82F6 0%, #1E3A8A 100%)',
-            color: 'white',
-            textAlign: 'center'
-          }}
-        >
-          <Typography variant="h5" fontWeight="700" gutterBottom>
-            Welcome! First-time Setup Required
-          </Typography>
-          <Typography variant="body1" sx={{ mb: 3, opacity: 0.9 }}>
-            Please register your face biometric to enable attendance features. 
-            This is a one-time process.
-          </Typography>
-          <Box sx={{ maxWidth: 500, mx: 'auto' }}>
-            <ErrorBoundary>
-              <React.Suspense fallback={<CircularProgress color="inherit" />}>
-                <FaceScanner 
-                  title="Register Your Face" 
-                  buttonText="Scan & Register" 
-                  onScan={onFaceEnroll} 
-                />
-              </React.Suspense>
-            </ErrorBoundary>
-          </Box>
-        </Paper>
-      )}
 
       {/* Portal Active Alert */}
-      {portalOpen && studentProfile?.faceRegistered && !showScanner && (
+      {portalOpen && studentProfile && (
         <Paper
           elevation={3}
           sx={{
@@ -333,7 +247,7 @@ const StudentDashboard = () => {
             variant="contained"
             size="large"
             onClick={handleMarkAttendance}
-            disabled={marking}
+            disabled={loading}
             startIcon={<CheckCircleIcon />}
             sx={{
               bgcolor: 'white',
@@ -350,28 +264,6 @@ const StudentDashboard = () => {
             Mark Me Present
           </Button>
         </Paper>
-      )}
-
-      {/* Face Verification Scanner for Attendance */}
-      {showScanner && (
-        <Box sx={{ mb: 4, maxWidth: 600, mx: 'auto' }}>
-          <ErrorBoundary>
-            <React.Suspense fallback={<CircularProgress />}>
-              <FaceScanner 
-                title="Verify Your Face" 
-                buttonText="Verify & Mark Attendance" 
-                onScan={onFaceVerify} 
-              />
-            </React.Suspense>
-          </ErrorBoundary>
-          <Button 
-            fullWidth 
-            onClick={() => setShowScanner(false)} 
-            sx={{ mt: 1, color: 'text.secondary' }}
-          >
-            Cancel
-          </Button>
-        </Box>
       )}
 
       {/* Student Info Card */}

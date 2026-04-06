@@ -42,8 +42,14 @@ const StudentAttendance = () => {
   const loadAttendance = async () => {
     try {
       setLoading(true);
-      // For demo purposes, we'll use student ID 1
-      const studentId = 1;
+      const username = localStorage.getItem('username');
+      if (!username) {
+        setError('User session not found. Please log in again.');
+        return;
+      }
+      
+      const profile = await studentService.getProfile(username);
+      const studentId = profile.id;
       
       const [attendanceData, summaryData] = await Promise.all([
         studentService.getMyAttendance(studentId),
@@ -91,6 +97,13 @@ const StudentAttendance = () => {
           icon: <AccessTimeIcon sx={{ fontSize: 16 }} />,
           label: 'OD (External)'
         };
+      case 'LEAVE':
+        return { 
+          bg: 'rgba(59, 130, 246, 0.1)', 
+          color: '#3B82F6',
+          icon: <CancelIcon sx={{ fontSize: 16 }} />,
+          label: 'Leave'
+        };
       default:
         return { 
           bg: 'rgba(148, 163, 184, 0.1)', 
@@ -103,9 +116,21 @@ const StudentAttendance = () => {
 
   const calculatePercentage = () => {
     if (!summary) return 0;
-    const total = (summary.present || 0) + (summary.absent || 0) + (summary.odInternal || 0) + (summary.odExternal || 0);
+    const total = (summary.present || 0) + (summary.absent || 0) + (summary.odInternal || 0) + (summary.odExternal || 0) + (summary.leave || 0);
     if (total === 0) return 0;
+    // Formula: {total present days / total working days} * 100
+    // Note: OD is usually counted as present in many systems, but here we follow user's implicit request of present/total
     return Math.round(((summary.present || 0) * 100) / total);
+  };
+
+  const calculateClassesNeeded = () => {
+    if (!summary) return 0;
+    const P = summary.present || 0;
+    const T = (summary.present || 0) + (summary.absent || 0) + (summary.odInternal || 0) + (summary.odExternal || 0) + (summary.leave || 0);
+    
+    // Formula: (P + x) / (T + x) >= 0.75  =>  x >= 3T - 4P
+    const needed = Math.ceil(3 * T - 4 * P);
+    return Math.max(0, needed);
   };
 
   if (loading) {
@@ -233,7 +258,7 @@ const StudentAttendance = () => {
             </Card>
           </Grid>
 
-          {/* OD Days */}
+          {/* OD & Leave Days */}
           <Grid xs={12} sm={6} md={3}>
             <Card sx={{ borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
               <CardContent sx={{ p: 3, textAlign: 'center' }}>
@@ -242,8 +267,8 @@ const StudentAttendance = () => {
                     width: 50,
                     height: 50,
                     borderRadius: 2,
-                    background: 'rgba(249, 115, 22, 0.1)',
-                    color: '#F97316',
+                    background: 'rgba(59, 130, 246, 0.1)',
+                    color: '#3B82F6',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -253,16 +278,71 @@ const StudentAttendance = () => {
                 >
                   <AccessTimeIcon fontSize="large" />
                 </Box>
-                <Typography variant="h4" fontWeight="700" sx={{ color: '#F97316', mb: 1 }}>
-                  {(summary.odInternal || 0) + (summary.odExternal || 0)}
+                <Typography variant="h4" fontWeight="700" sx={{ color: '#3B82F6', mb: 1 }}>
+                  {(summary.odInternal || 0) + (summary.odExternal || 0) + (summary.leave || 0)}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" fontWeight="500">
-                  On Duty Days
+                  Leave & OD Days
                 </Typography>
               </CardContent>
             </Card>
           </Grid>
         </Grid>
+      )}
+
+      {percentage < 75 && (
+        <Alert 
+          severity="warning" 
+          variant="outlined" 
+          sx={{ 
+            mb: 3, 
+            borderRadius: 3, 
+            borderWidth: 2,
+            borderColor: '#F97316',
+            background: 'rgba(249, 115, 22, 0.05)',
+            '& .MuiAlert-icon': { color: '#F97316' }
+          }}
+        >
+          <Typography variant="subtitle1" fontWeight="700" color="#C2410C">
+            Attendance Warning
+          </Typography>
+          <Typography variant="body2" color="#C2410C">
+            Your current attendance is {percentage}%, which is below the required 75%. 
+            You need to attend at least <strong>{calculateClassesNeeded()}</strong> more consecutive classes to reach the 75% threshold.
+          </Typography>
+        </Alert>
+      )}
+
+      {/* Leave & OD History Highlights */}
+      {(summary?.odInternal > 0 || summary?.odExternal > 0 || summary?.leave > 0) && (
+        <Paper elevation={0} sx={{ p: 3, mb: 3, borderRadius: 3, background: 'rgba(59, 130, 246, 0.05)', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+          <Typography variant="subtitle2" fontWeight="700" color="#1E40AF" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <AccessTimeIcon sx={{ fontSize: 18 }} /> Leave & OD History Highlights
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+            {attendance
+              .filter(r => ['OD_INTERNAL', 'OD_EXTERNAL', 'LEAVE'].includes(r.status))
+              .slice(0, 10) // Show last 10 highlights
+              .map((record) => (
+                <Chip
+                  key={record.id}
+                  label={`${new Date(record.date).toLocaleDateString()} - ${record.status.replace('_', ' ')}`}
+                  size="small"
+                  sx={{ 
+                    bgcolor: record.status === 'LEAVE' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(249, 115, 22, 0.1)',
+                    color: record.status === 'LEAVE' ? '#1E40AF' : '#C2410C',
+                    fontWeight: 600,
+                    fontSize: '0.75rem'
+                  }}
+                />
+              ))}
+            {attendance.filter(r => ['OD_INTERNAL', 'OD_EXTERNAL', 'LEAVE'].includes(r.status)).length > 10 && (
+              <Typography variant="caption" color="text.secondary" sx={{ alignSelf: 'center', ml: 1 }}>
+                + more in history below
+              </Typography>
+            )}
+          </Box>
+        </Paper>
       )}
 
       {error && (

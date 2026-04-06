@@ -51,4 +51,10 @@ export const facultyService = {
     const response = await api.get(`/api/faculty/classroom/${classId}/portal-status`);
     return response.data;
   },
+
+  // Get attendance by classroom and date
+  getAttendanceByClassAndDate: async (classId, date) => {
+    const response = await api.get(`/api/faculty/classroom/${classId}/attendance?date=${date}`);
+    return response.data;
+  },
 };

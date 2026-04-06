@@ -53,7 +53,13 @@ const Attendance = () => {
     loadClasses();
   }, []);
 
-  // Timer logic
+  // Reload attendance when date changes
+  useEffect(() => {
+    if (selectedClass) {
+      handleClassChange(selectedClass);
+    }
+  }, [date]);
+
   useEffect(() => {
     let timer = null;
     if (portalOpen && timeLeft > 0) {
@@ -74,6 +80,41 @@ const Attendance = () => {
       if (timer) clearInterval(timer);
     };
   }, [portalOpen, portalExpiry, timeLeft]);
+
+  // Real-time updates via SSE
+  useEffect(() => {
+    let eventSource: EventSource | null = null;
+
+    if (selectedClass && portalOpen) {
+      const token = localStorage.getItem('token');
+      const url = `${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/api/faculty/attendance/stream/${selectedClass}?token=${token}`;
+      
+      eventSource = new EventSource(url);
+
+      eventSource.addEventListener('attendanceUpdate', (event: any) => {
+        try {
+          const data = JSON.parse(event.data);
+          setAttendance((prev) => ({
+            ...prev,
+            [data.regdNumber]: data.status,
+          }));
+        } catch (err) {
+          console.error('Failed to parse attendance update', err);
+        }
+      });
+
+      eventSource.onerror = (err) => {
+        console.error('EventSource failed:', err);
+        eventSource?.close();
+      };
+    }
+
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
+  }, [selectedClass, portalOpen]);
 
   const loadClasses = async () => {
     try {
@@ -108,10 +149,26 @@ const Attendance = () => {
     try {
       const data = await facultyService.getClassroomStudents(classId);
       setStudents(data);
+      // Check for existing attendance for this class and date
+      const formattedDate = date.format('YYYY-MM-DD');
+      const existingAttendance = await facultyService.getAttendanceByClassAndDate(classId, formattedDate);
+      
       const initialAttendance = {};
+      
+      // Default all to ABSENT
       data.forEach((student) => {
-        initialAttendance[student.regdNumber] = 'PRESENT';
+        initialAttendance[student.regdNumber] = 'ABSENT';
       });
+
+      // Override with existing records if they exist
+      if (existingAttendance && existingAttendance.length > 0) {
+        existingAttendance.forEach((record) => {
+          if (record.student && record.student.regdNumber) {
+            initialAttendance[record.student.regdNumber] = record.status;
+          }
+        });
+      }
+
       setAttendance(initialAttendance);
     } catch (err) {
       setError('Failed to load students');
@@ -164,6 +221,8 @@ const Attendance = () => {
         return { bg: 'rgba(249, 115, 22, 0.1)', color: '#F97316' };
       case 'OD_EXTERNAL':
         return { bg: 'rgba(139, 92, 246, 0.1)', color: '#8B5CF6' };
+      case 'LEAVE':
+        return { bg: 'rgba(59, 130, 246, 0.1)', color: '#3B82F6' };
       default:
         return { bg: 'rgba(148, 163, 184, 0.1)', color: '#94A3B8' };
     }
@@ -353,7 +412,7 @@ const Attendance = () => {
                 </TableHead>
                 <TableBody>
                   {students.map((student, index) => {
-                    const statusColors = getStatusColor(attendance[student.regdNumber] || 'PRESENT');
+                    const statusColors = getStatusColor(attendance[student.regdNumber] || 'ABSENT');
                     return (
                       <TableRow
                         key={student.id}
@@ -419,7 +478,7 @@ const Attendance = () => {
                         <TableCell>
                           <FormControl fullWidth size="small">
                             <Select
-                              value={attendance[student.regdNumber] || 'PRESENT'}
+                              value={attendance[student.regdNumber] || 'ABSENT'}
                               onChange={(e) =>
                                 handleAttendanceChange(student.regdNumber, e.target.value)
                               }
@@ -448,6 +507,9 @@ const Attendance = () => {
                               <MenuItem value="OD_EXTERNAL" sx={{ color: '#8B5CF6', fontWeight: 600 }}>
                                 ⏤ OD (External)
                               </MenuItem>
+                              <MenuItem value="LEAVE" sx={{ color: '#3B82F6', fontWeight: 600 }}>
+                                ⚐ Leave
+                              </MenuItem>
                             </Select>
                           </FormControl>
                         </TableCell>
@@ -462,15 +524,15 @@ const Attendance = () => {
               <Button
                 variant="outlined"
                 onClick={() => {
-                  const allPresent = {};
+                  const allAbsent = {};
                   students.forEach((s) => {
-                    allPresent[s.regdNumber] = 'PRESENT';
+                    allAbsent[s.regdNumber] = 'ABSENT';
                   });
-                  setAttendance(allPresent);
+                  setAttendance(allAbsent);
                 }}
                 sx={{ borderRadius: 2 }}
               >
-                Mark All Present
+                Mark All Absent
               </Button>
               <Button
                 variant="contained"
