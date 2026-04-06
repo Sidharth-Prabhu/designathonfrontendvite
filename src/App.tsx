@@ -145,6 +145,17 @@ function AppRoutes() {
 }
 
 function App() {
+  React.useEffect(() => {
+    if ("geolocation" in navigator) {
+      // Trigger permission request early
+      navigator.geolocation.getCurrentPosition(
+        () => console.log("Location permission granted early"),
+        () => console.log("Location permission denied early"),
+        { enableHighAccuracy: true }
+      );
+    }
+  }, []);
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />

@@ -41,9 +41,14 @@ export const facultyService = {
     return response.data;
   },
 
+  markMyAttendance: async (classId, username, latitude, longitude) => {
+    const response = await api.post('/api/student/mark-my-attendance', { classId, username, latitude, longitude });
+    return response.data;
+  },
+
   // Portal methods
-  openPortal: async (classId) => {
-    const response = await api.post(`/api/faculty/classroom/${classId}/open-portal`);
+  openPortal: async (classId, latitude, longitude) => {
+    const response = await api.post(`/api/faculty/classroom/${classId}/open-portal`, { latitude, longitude });
     return response.data;
   },
 

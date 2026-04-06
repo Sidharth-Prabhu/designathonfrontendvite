@@ -29,8 +29,8 @@ export const studentService = {
   },
 
 
-  markMyAttendance: async (classId, username) => {
-    const response = await api.post('/api/student/mark-my-attendance', { classId, username });
+  markMyAttendance: async (classId, username, latitude, longitude) => {
+    const response = await api.post('/api/student/mark-my-attendance', { classId, username, latitude, longitude });
     return response.data;
   },
 };

@@ -20,6 +20,9 @@ import {
   Menu,
   MenuItem,
   Divider,
+  Alert,
+  AlertTitle,
+  Button,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -32,6 +35,8 @@ import {
   Assignment as AssignmentIcon,
   ExitToApp as ExitToAppIcon,
   Person as PersonIcon,
+  LocationOff as LocationOffIcon,
+  GpsFixed as GpsFixedIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 
@@ -45,6 +50,38 @@ const Layout = ({ children, title }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [locationError, setLocationError] = useState(null);
+
+  React.useEffect(() => {
+    checkLocationPermission();
+  }, []);
+
+  const checkLocationPermission = () => {
+    if (!navigator.geolocation) {
+      setLocationError('Geolocation not supported');
+      return;
+    }
+
+    // Check if origin is secure
+    const isSecure = window.location.protocol === 'https:' || 
+                     window.location.hostname === 'localhost' || 
+                     window.location.hostname === '127.0.0.1';
+    
+    if (!isSecure && window.location.hostname !== 'localhost') {
+      setLocationError('INSECURE_ORIGIN');
+    }
+  };
+
+  const requestLocation = () => {
+    navigator.geolocation.getCurrentPosition(
+      () => setLocationError(null),
+      (err) => {
+        if (err.code === 1) setLocationError('PERMISSION_DENIED');
+        else setLocationError('POSITION_ERROR');
+      },
+      { enableHighAccuracy: true }
+    );
+  };
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -346,6 +383,41 @@ const Layout = ({ children, title }) => {
             width: '100%',
           }}
         >
+          {locationError === 'INSECURE_ORIGIN' && (
+            <Alert 
+              severity="error" 
+              variant="filled"
+              sx={{ mb: 3, borderRadius: 2 }}
+              icon={<LocationOffIcon />}
+            >
+              <AlertTitle sx={{ fontWeight: 700 }}>Location Blocked (Insecure Connection)</AlertTitle>
+              Chrome blocks location requests on non-HTTPS sites. To test on mobile, use 
+              <strong> localhost</strong> or 
+              <strong> HTTPS</strong>. 
+              <Box sx={{ mt: 1 }}>
+                <Typography variant="caption" sx={{ display: 'block', opacity: 0.9 }}>
+                  Tip: Enable <strong>chrome://flags/#unsafely-treat-insecure-origin-as-secure</strong> in your Android Chrome and add your IP:Port to the list.
+                </Typography>
+              </Box>
+            </Alert>
+          )}
+
+          {locationError === 'PERMISSION_DENIED' && (
+            <Alert 
+              severity="warning" 
+              sx={{ mb: 3, borderRadius: 2, bgcolor: 'rgba(249, 115, 22, 0.1)', color: '#C2410C', border: '1px solid #F97316' }}
+              icon={<LocationOffIcon sx={{ color: '#F97316' }} />}
+              action={
+                <Button color="inherit" size="small" onClick={requestLocation} sx={{ fontWeight: 700 }}>
+                  Try Again
+                </Button>
+              }
+            >
+              <AlertTitle sx={{ fontWeight: 700 }}>Location Permission Required</AlertTitle>
+              Please enable location access in your browser settings to mark attendance correctly.
+            </Alert>
+          )}
+
           {children}
         </Box>
       </Box>

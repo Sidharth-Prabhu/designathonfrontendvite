@@ -118,17 +118,41 @@ const StudentDashboard = () => {
 
   const handleMarkAttendance = async () => {
     if (!studentProfile?.classId) return;
-    try {
-      setLoading(true);
-      await studentService.markMyAttendance(studentProfile.classId, user.username);
-      setMessage({ text: 'Attendance marked successfully!', type: 'success' });
-      setPortalOpen(false); 
-      loadStats(); 
-    } catch (err: any) {
-      setMessage({ text: err.response?.data?.error || 'Failed to mark attendance', type: 'error' });
-    } finally {
-      setLoading(false);
+    
+    // Get current location first for verification
+    if (!navigator.geolocation) {
+      setMessage({ text: 'Geolocation is not supported by your browser', type: 'error' });
+      return;
     }
+
+    setLoading(true);
+    setMessage({ text: '', type: 'info' });
+    
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        try {
+          await studentService.markMyAttendance(
+            studentProfile.classId, 
+            user.username,
+            latitude,
+            longitude
+          );
+          setMessage({ text: 'Attendance marked successfully!', type: 'success' });
+          setPortalOpen(false); 
+          loadStats(); 
+        } catch (err: any) {
+          setMessage({ text: err.response?.data?.error || 'Failed to mark attendance. Are you inside the class?', type: 'error' });
+        } finally {
+          setLoading(false);
+        }
+      },
+      (err) => {
+        setLoading(false);
+        setMessage({ text: `Failed to get location: ${err.message}. Location permission is required for attendance.`, type: 'error' });
+      },
+      { enableHighAccuracy: true }
+    );
   };
 
 

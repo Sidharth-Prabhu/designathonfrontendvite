@@ -177,15 +177,32 @@ const Attendance = () => {
 
   const handleOpenPortal = async () => {
     if (!selectedClass) return;
-    try {
-      const response = await facultyService.openPortal(selectedClass);
-      setPortalOpen(true);
-      setPortalExpiry(response.expiry);
-      setTimeLeft(120); // 2 minutes
-      setSuccess('Attendance portal is now OPEN for 2 minutes!');
-    } catch (err) {
-      setError('Failed to open portal');
+    
+    // Get current location first
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser');
+      return;
     }
+
+    setSuccess('Fetching your location...');
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        try {
+          const response = await facultyService.openPortal(selectedClass, latitude, longitude);
+          setPortalOpen(true);
+          setPortalExpiry(response.expiry);
+          setTimeLeft(120); // 2 minutes
+          setSuccess('Attendance portal is now OPEN for 2 minutes at your current location!');
+        } catch (err) {
+          setError('Failed to open portal. Please try again.');
+        }
+      },
+      (err) => {
+        setError(`Failed to get location: ${err.message}. Please enable location permissions.`);
+      },
+      { enableHighAccuracy: true }
+    );
   };
 
   const handleAttendanceChange = (regdNumber, status) => {
