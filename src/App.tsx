@@ -16,6 +16,9 @@ import Classes from './pages/faculty/Classes';
 import Attendance from './pages/faculty/Attendance';
 import StudentDashboard from './pages/student/StudentDashboard';
 import StudentAttendance from './pages/student/StudentAttendance';
+import DriverDashboard from './pages/driver/DriverDashboard';
+import AdminBusTracker from './pages/admin/AdminBusTracker';
+import AdminDrivers from './pages/admin/AdminDrivers';
 
 // Protected Route Component
 const ProtectedRoute = ({ children, allowedRoles }) => {
@@ -41,6 +44,7 @@ const PublicRoute = ({ children }) => {
     if (role === 'ADMIN') return <Navigate to="/admin/dashboard" replace />;
     if (role === 'FACULTY') return <Navigate to="/faculty/dashboard" replace />;
     if (role === 'STUDENT') return <Navigate to="/student/dashboard" replace />;
+    if (role === 'DRIVER') return <Navigate to="/driver/dashboard" replace />;
   }
 
   return children;
@@ -69,6 +73,14 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/admin/bus-tracker"
+        element={
+          <ProtectedRoute allowedRoles={['ADMIN']}>
+            <AdminBusTracker />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/admin/students"
         element={
           <ProtectedRoute allowedRoles={['ADMIN']}>
@@ -89,6 +101,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute allowedRoles={['ADMIN']}>
             <Classrooms />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/drivers"
+        element={
+          <ProtectedRoute allowedRoles={['ADMIN']}>
+            <AdminDrivers />
           </ProtectedRoute>
         }
       />
@@ -133,6 +153,16 @@ function AppRoutes() {
         element={
           <ProtectedRoute allowedRoles={['STUDENT']}>
             <StudentAttendance />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Driver Routes */}
+      <Route
+        path="/driver/dashboard"
+        element={
+          <ProtectedRoute allowedRoles={['DRIVER']}>
+            <DriverDashboard />
           </ProtectedRoute>
         }
       />

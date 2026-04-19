@@ -24,6 +24,7 @@ import {
 import Layout from '../Layout';
 import { useAuth } from '../../context/AuthContext';
 import { studentService } from '../../services/studentService';
+import { busService } from '../../services/busService';
 import dayjs from 'dayjs';
 
 const Grid = MuiGrid as any;
@@ -47,11 +48,45 @@ const StudentDashboard = () => {
   const [portalExpiry, setPortalExpiry] = useState<any>(null);
   const [timeLeft, setTimeLeft] = useState(0);
   const [message, setMessage] = useState({ text: '', type: 'info' });
+  const [busInfo, setBusInfo] = useState<any>(null);
 
   useEffect(() => {
     loadStats();
     loadProfileAndCheckPortal();
   }, []);
+
+  // Bus Proximity Check (Automatic)
+  useEffect(() => {
+    const checkBus = async () => {
+      if (!navigator.geolocation || !user?.username) return;
+
+      navigator.geolocation.getCurrentPosition(async (position) => {
+        try {
+          const result = await busService.checkProximity(
+            user.username,
+            position.coords.latitude,
+            position.coords.longitude
+          );
+          if (result.inRange && !busInfo) {
+            setBusInfo(result);
+            setMessage({ 
+              text: `Welcome aboard Bus #${result.busNumber}! Attendance marked automatically.`, 
+              type: 'success' 
+            });
+            loadStats();
+          }
+        } catch (err) {
+          console.error('Bus proximity check failed');
+        }
+      });
+    };
+
+    // Check every 10 seconds
+    const interval = setInterval(checkBus, 10000);
+    checkBus(); // Initial check
+
+    return () => clearInterval(interval);
+  }, [user, busInfo]);
 
   // Portal Timer logic
   useEffect(() => {

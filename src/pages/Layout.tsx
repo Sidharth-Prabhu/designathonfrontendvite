@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
@@ -36,7 +36,8 @@ import {
   ExitToApp as ExitToAppIcon,
   Person as PersonIcon,
   LocationOff as LocationOffIcon,
-  GpsFixed as GpsFixedIcon,
+  GpsFixed as GpsIcon,
+  DirectionsBus as BusIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 
@@ -52,7 +53,7 @@ const Layout = ({ children, title }) => {
   const location = useLocation();
   const [locationError, setLocationError] = useState(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     checkLocationPermission();
   }, []);
 
@@ -109,6 +110,7 @@ const Layout = ({ children, title }) => {
         { text: 'Students', icon: <SchoolIcon />, path: '/admin/students' },
         { text: 'Faculties', icon: <PeopleIcon />, path: '/admin/faculties' },
         { text: 'Classrooms', icon: <ClassIcon />, path: '/admin/classrooms' },
+        { text: 'Bus Tracker', icon: <BusIcon />, path: '/admin/bus-tracker' },
       ];
     }
     if (role === 'FACULTY') {
@@ -122,6 +124,11 @@ const Layout = ({ children, title }) => {
       return [
         { text: 'Dashboard', icon: <DashboardIcon />, path: '/student/dashboard' },
         { text: 'My Attendance', icon: <AssignmentIcon />, path: '/student/attendance' },
+      ];
+    }
+    if (role === 'DRIVER') {
+      return [
+        { text: 'Bus Dashboard', icon: <DashboardIcon />, path: '/driver/dashboard' },
       ];
     }
     return [];
